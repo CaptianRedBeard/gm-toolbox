@@ -3,8 +3,8 @@ package dice
 import (
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strconv"
-	"strings"
 )
 
 // DefaultDiceSides sets the default die type for a roll with no expression.
@@ -16,38 +16,48 @@ type Result struct {
 	Expr  string
 }
 
-// Roll handles the dice rolling logic.
 func Roll(expression string) Result {
 	if expression == "" {
-		// Use the constant for the default expression string too
-		return singleDieRoll(DefaultDiceSides)
-	}
-
-	if strings.HasPrefix(expression, "d") {
-		sidesStr := expression[1:]
-		diceSides, err := strconv.Atoi(sidesStr)
-
-		if err != nil {
-			// If parsing fails (e.g., "dABC"), fall back to a d20 roll
-			// but show the original, bad expression in the result.
-			result := singleDieRoll(DefaultDiceSides)
-			result.Expr = expression
-			return result
+		total, rolls := rollNDice(1, DefaultDiceSides)
+		return Result{
+			Total: total,
+			Rolls: rolls,
+			Expr:  fmt.Sprintf("d%d", DefaultDiceSides),
 		}
-
-		return singleDieRoll(diceSides)
 	}
 
-	// Placeholder for all other cases
+	re := regexp.MustCompile(`^^(\d*)d(\d+)$`)
+	matches := re.FindStringSubmatch(expression)
+	if matches != nil {
+		count, _ := strconv.Atoi(matches[1])
+		if count == 0 {
+			count = 1 // Handles "d6"
+		}
+		sides, _ := strconv.Atoi(matches[2])
+
+		total, rolls := rollNDice(count, sides)
+
+		// The parser is responsible for creating the final, clean result
+		return Result{
+			Total: total,
+			Rolls: rolls,
+			Expr:  fmt.Sprintf("%dd%d", count, sides),
+		}
+	}
+
+	// Fallback for invalid expressions
 	return Result{}
 }
 
-// singleDieRoll is a helper for the common "roll one die" logic.
-func singleDieRoll(sides int) Result {
-	singleRoll := rand.Intn(sides) + 1
-	return Result{
-		Total: singleRoll,
-		Rolls: []int{singleRoll},
-		Expr:  fmt.Sprintf("d%d", sides), // Create the canonical expression string
+// rollNDice performs the core logic of rolling N dice with Y sides.
+// It returns the total and the slice of individual rolls.
+func rollNDice(count, sides int) (int, []int) {
+	rolls := make([]int, count)
+	total := 0
+	for i := 0; i < count; i++ {
+		roll := rand.Intn(sides) + 1
+		rolls[i] = roll
+		total += roll
 	}
+	return total, rolls
 }
